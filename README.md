@@ -37,8 +37,9 @@ qrl/analyses/       one module per family of tests
 
 ## Data
 
-The result files used in the paper are distributed separately. Placing them in `results/` lets `analyze.py`
-recompute every statistic without retraining.
+The result files of the paper are in `results/`, one JSON file per run with its training returns, together with
+the greedy evaluations (`results/greedy/`) and the output heads of the saved networks (`results/heads/`).
+`analyze.py` recomputes every statistic from them without retraining.
 
 ## License
 

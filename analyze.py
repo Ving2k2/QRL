@@ -29,6 +29,8 @@ ANALYSES = {
     "observable_vs_head": "Head type and observable, both stages",
     "observable_vs_head_1000": "Head type and observable at 1000 episodes",
     "head_lr_time_limit_1000": "Head learning rate x time-limit rule at 1000 episodes",
+    "head_lr_1000_paired": "The readout gap at 1000 episodes, head lr 0.01 against 0.1, paired by seed",
+    "bounded_features_1000": "Classical control: bounded features read through the heads of the circuits",
     "bootstrap_arms_1000": "Arm E and the Skolik agent under the bootstrap rule at 1000 episodes",
     "exploratory_windows_1000": "Exploratory: variance model and score window at 1000 episodes",
     "time_limit_300": "The time-limit rule at 300 episodes",

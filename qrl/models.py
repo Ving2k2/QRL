@@ -310,3 +310,41 @@ class TanhInput(nn.Module):
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+class BoundedFeatureQNet(nn.Module):
+    """Classical control for the head effects: four features bounded in (-1, 1), from the input normalization of the
+    circuits and a small tanh network, read through the heads of the circuits.
+
+    readout "Zi": a dense head on the four features; "ZZd": a dense head on the products f0*f2 and f1*f3; "ZZs": one
+    scalar pair (w_a, b_a) per action on the same products. The feature network is stored as `vqc`, so training uses
+    the circuit learning rate for it and the head learning rate for the head, as for the circuits.
+    """
+
+    def __init__(self, readout, scale, state_dim=4, action_dim=2, hidden=8):
+        super().__init__()
+        assert readout in ("Zi", "ZZd", "ZZs")
+        self.readout = readout
+        self.vqc = nn.Sequential(nn.Linear(state_dim, hidden), nn.Tanh(), nn.Linear(hidden, 4), nn.Tanh())
+        if readout == "ZZs":
+            self.output_w = nn.Parameter(torch.full((action_dim,), float(scale)))
+            self.output_b = nn.Parameter(torch.zeros(action_dim))
+        else:
+            n_in = 4 if readout == "Zi" else 2
+            self.output_head = nn.Linear(n_in, action_dim, bias=True)
+            nn.init.normal_(self.output_head.weight, mean=0.0, std=float(scale) / (n_in * math.sqrt(2.0 / math.pi)))
+            nn.init.zeros_(self.output_head.bias)
+
+    def forward(self, x):
+        f = self.vqc(_cartpole_normalise(x))
+        if self.readout == "Zi":
+            return self.output_head(f)
+        g = torch.stack([f[..., 0] * f[..., 2], f[..., 1] * f[..., 3]], dim=-1)
+        if self.readout == "ZZs":
+            return g * self.output_w + self.output_b
+        return self.output_head(g)
+
+
+def bounded_features(readout, scale):
+    """Constructor of a BoundedFeatureQNet."""
+    return lambda: BoundedFeatureQNet(readout, scale)

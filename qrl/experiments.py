@@ -3,12 +3,13 @@
 A run is one agent trained from one seed. Its result is results/<experiment>/<run name>.json. "terminal" and
 "bootstrap" are the two rules for the 500-step time limit (qrl.training.train).
 """
+import math
 import os
 from dataclasses import dataclass, field
 
 from . import classical_dqn, protocols
 from .cells import CELLS, FACTORIAL, slug
-from .models import TanhInput, mlp
+from .models import TanhInput, bounded_features, mlp
 
 MLP_WIDTHS = {"1x12": [12], "1x16": [16], "2x8": [8, 8], "2x16": [16, 16], "2x64": [64, 64]}
 MLP_INPUTS = ["raw", "tanh"]
@@ -111,11 +112,17 @@ def experiments(results_root=RESULTS):
                    snapshot_every=50, head_lr=0.1))
     E["head_lr_time_limit_1000"] = (
         "Head learning rate x time-limit rule, 1000 episodes (arms A, B, E; S: the Skolik agent)",
-        [r for arm, lr, boot in (("A", 0.01, False), ("B", 0.01, True), ("E", 0.1, True)) for r in _cell_runs(
-            FACTORIAL, range(5), 1000, lambda c, lr=lr, boot=boot: sk(lr, bootstrap_truncation=boot), prefix=arm + "_",
+        [r for arm, lr, boot, n in (("A", 0.01, False, 15), ("B", 0.01, True, 5), ("E", 0.1, True, 5)) for r in _cell_runs(
+            FACTORIAL, range(n), 1000, lambda c, lr=lr, boot=boot: sk(lr, bootstrap_truncation=boot), prefix=arm + "_",
             snapshot_every=50, arm=arm, head_lr=lr, bootstrap_truncation=boot)]
         + _cell_runs(["Skolik"], range(5), 1000, lambda c: sk(bootstrap_truncation=True), prefix="S_",
                      snapshot_every=50, arm="S", head_lr=0.1, bootstrap_truncation=True))
+    E["bounded_features_1000"] = (
+        "Classical control: four bounded features read through the three heads, head lr 0.1 and 0.01, 1000 episodes",
+        [Run("%s_%s_%s_seed%d" % (r, g, lr, s), bounded_features(r, scale), s, 1000, "CartPole-v1", sk(float(lr)),
+             dict(readout=r, range=g, head_lr=float(lr)), 50)
+         for s in range(15) for lr in ("0.1", "0.01") for r in ("Zi", "ZZd", "ZZs")
+         for g, scale in (("LO", 4 * math.sqrt(2.0 / math.pi)), ("HI", 30.0))])
     E["time_limit_300"] = ("The factorial under the bootstrap rule, Skolik protocol, 300 episodes",
                            [r for lr in (0.1, 0.01) for r in _cell_runs(
                                FACTORIAL, range(5), 300, lambda c, lr=lr: sk(lr, bootstrap_truncation=True),
