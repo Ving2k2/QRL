@@ -5,7 +5,8 @@ D(seed) = mean final-20 score at episode 1000 (episodes 981-1000) of the four tw
 per-qubit cells (averaged over initial range and re-uploading). Confirmatory: the change D(A) - D(C), paired by seed
 over seeds 0-14 (df 14), two-sided t-test, Holm-corrected together with D(A) alone. Check: the first 300 episodes of
 the seed 5-9 runs of arm A equal the 300-episode runs they continue. Described: the share of D(C) removed, an unpaired
-Welch version, longer score windows, seeds 0-4 against 5-14, 1000-episode collapses per readout.
+Welch version, longer score windows, seeds 0-4 against 5-14, the change on seeds 5-14
+alone, 1000-episode collapses per readout.
 -> analysis/head_lr_1000_paired.txt
 """
 import os
@@ -87,6 +88,10 @@ def main():
             % (lab, c_.mean(), a_.mean(), m, l_, h_, -100 * m / c_.mean()))
     for lab, seeds in (("seeds 0-4", range(5)), ("seeds 5-14", range(5, 15))):
         say("  %-10s D(A) %+6.1f   D(C) %+6.1f" % (lab, D("A", seeds=seeds).mean(), D("C", seeds=seeds).mean()))
+    new = list(range(5, 15))
+    c5, a5 = ci_t(D("A", seeds=new) - D("C", seeds=new)), ci_t(D("A", seeds=new))
+    say("  seeds 5-14 only (not analysed before the extension): D(A)-D(C) %+.1f [%+.1f, %+.1f] p=%.3g;  D(A) %+.1f [%+.1f, %+.1f]"
+        % (c5[0], c5[1], c5[2], c5[3], a5[0], a5[1], a5[2]))
     for a in "AC":
         for lab, cells in (("per-qubit", PER_QUBIT), ("two-body", TWO_BODY)):
             n = sum(H[(a, c, s)][980:].mean() < 0.5 * max(H[(a, c, s)][i:i + 20].mean() for i in range(981))

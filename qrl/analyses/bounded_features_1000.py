@@ -6,6 +6,7 @@ rates 0.1 and 0.01, Skolik protocol, terminal rule, 1000 episodes, seeds 0-14.
 Score: final-20 at episode 1000; per seed and readout, the mean over the two ranges. Confirmatory (one-sample t-tests
 of per-seed differences, df 14, Holm over four): H = ZZs - ZZd at 0.1; O = ZZd - Zi at 0.1; G = Zi(0.01) - Zi(0.1);
 dD = D(0.01) - D(0.1) with D = ZZs - Zi. Described: cell means, 1000-episode collapses, D, H and O at both rates.
+Exploratory: H, G and dD of the circuit without re-uploading minus those of the classical network, paired by seed.
 -> analysis/bounded_features_1000.txt
 """
 import os
@@ -30,6 +31,11 @@ def say(s=""):
 def t1(d):
     d = np.asarray(d, float); se = d.std(ddof=1) / np.sqrt(len(d)); hw = stats.t.ppf(0.975, len(d) - 1) * se
     return d.mean(), d.mean() - hw, d.mean() + hw, stats.ttest_1samp(d, 0.0).pvalue
+
+
+def mde(d, a):
+    n, sd = len(d), np.std(d, ddof=1); tc = stats.t.ppf(1 - a / 2, n - 1); g = np.arange(1, 400, 0.5)
+    return g[np.argmax([stats.nct.sf(tc, n - 1, x * np.sqrt(n) / sd) >= 0.8 for x in g])]
 
 
 def holm(ps):
@@ -70,6 +76,25 @@ def main():
         D, hh, oo = t1(R[("ZZs", lr)] - R[("Zi", lr)]), t1(R[("ZZs", lr)] - R[("ZZd", lr)]), t1(R[("ZZd", lr)] - R[("Zi", lr)])
         say("  head lr %-4s readout gap D %+7.1f [%+7.1f, %+7.1f]; head type %+7.1f [%+7.1f, %+7.1f]; feature part %+7.1f [%+7.1f, %+7.1f]"
             % (lr, D[0], D[1], D[2], hh[0], hh[1], hh[2], oo[0], oo[1], oo[2]))
+    say("  smallest effect detectable with 80% power (df 14), at 0.05 and at the strictest Holm threshold 0.0125:")
+    for (lab, d) in tests:
+        say("    %-40s %5.0f  %5.0f" % (lab, mde(d, 0.05), mde(d, 0.0125)))
+
+    # circuit minus classical on the same seeds (head-type control and arms A and C, without re-uploading)
+    from . import head_lr_1000_paired as hlp
+    from . import observable_vs_head_1000 as ovh
+    q = lambda k, s: 0.5 * sum(f20(np.array(read_json(ovh.path(k, g, s))["history"], float)) for g in RANGES)
+    arm = lambda a, cells, s: np.mean([f20(np.array(read_json(hlp.path(a, c, s))["history"][:1000], float)) for c in cells])
+    pq, tb = hlp.PER_QUBIT[:2], hlp.TWO_BODY[:2]
+    qH = np.array([q("ZZs", s) - q("ZZd", s) for s in SEEDS])
+    qG = np.array([arm("A", pq, s) - arm("C", pq, s) for s in SEEDS])
+    qdD = np.array([(arm("A", tb, s) - arm("A", pq, s)) - (arm("C", tb, s) - arm("C", pq, s)) for s in SEEDS])
+    say("")
+    say("EXPLORATORY: circuit minus classical, paired by seed (circuit without re-uploading)")
+    for lab, qd, (_, cd) in (("head type H", qH, tests[0]), ("head lr G", qG, tests[2]), ("gap change dD", qdD, tests[3])):
+        a, b = t1(qd), t1(qd - cd)
+        say("  %-13s circuit %+7.1f  classical %+7.1f  difference %+7.1f  95%% CI [%+7.1f, %+7.1f]  p=%.3g"
+            % (lab, a[0], cd.mean(), b[0], b[1], b[2], b[3]))
     open(data.output("bounded_features_1000.txt"), "w", encoding="utf-8").write("\n".join(OUT) + "\n")
 
 
